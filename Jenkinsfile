@@ -17,11 +17,14 @@ pipeline {
                     image 'gradle:jdk15'
                 }
             }
-            
+
             steps {
-                // Add your build steps here
-                // For example, you can build your code with Gradle:
-                // sh 'gradle clean build'
+                cleanWs()
+                checkout scm
+                sh 'chmod +x gradlew'
+                sh './gradlew build'
+                sh 'ls -ltr build/libs/'
+                stash 'source'
             }
         }
     }

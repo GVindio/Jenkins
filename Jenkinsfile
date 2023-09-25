@@ -1,45 +1,53 @@
 pipeline {
     agent any
 
-    stages {
-        stage('Checkout') {
-            steps {
-                // Checkout the source code from a Git repository
-                checkout scm
-            }
-        }
-
-        stage('Build') {
-            steps {
-                // Build the code (echo a message in this example)
-                sh 'echo "Building the code..."'
-            }
-        }
-
-        stage('Test') {
-            steps {
-                // Run a test (echo a message in this example)
-                sh 'echo "Running tests..."'
-            }
-        }
-
-        stage('Archive Artifacts') {
-            steps {
-                // Archive build artifacts (e.g., test reports, binaries)
-                archiveArtifacts artifacts: '**/target/*.jar', allowEmptyArchive: true
-            }
-        }
+    environment {
+        DOCKERHUB = credentials('docker_creds')
     }
 
-    post {
-        success {
-            // Display a success message
-            echo 'Pipeline succeeded! Tests passed.'
+    options {
+        timestamps()
+        skipDefaultCheckout(true)
+    }
+
+    stages {
+        stage('Build code') {
+            agent {
+                docker {
+                    image 'gradle:jdk15'
+                }
+            }
+
+            steps {
+                cleanWs()
+                checkout scm
+                sh 'chmod +x gradlew'
+                sh './gradlew build'
+                sh 'ls -ltr build/libs/'
+                stash 'source'
+            }
         }
-        failure {
-            // Display a failure message
-            echo 'Pipeline failed! Tests may have failed.'
+
+        stage('Build image') {
+            steps {
+                unstash 'source'
+                sh '''
+                ls -ltr build/libs/
+                docker image build -t gvindio/springboot:latest .
+                docker login -u $DOCKERHUB_USR -p $DOCKERHUB_PSW
+                docker push gvindio/springboot:latest
+                '''
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sshagent(credentials: ['docker-ssh']) {
+                    sh 'ssh -o StrictHostKeyChecking=no ubuntu@52.91.131.107 uptime'
+                    sh 'ssh -v ubuntu@52.91.131.107'
+                    sh 'sudo docker container run -d -p 8081:8080 --name springboot1 gvindio/springboot:latest'
+                }
+            }
         }
     }
 }
-

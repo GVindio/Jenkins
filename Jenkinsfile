@@ -1,6 +1,6 @@
 pipeline {
     agent any
-
+    sudo docker
     environment {
         DOCKERHUB = credentials('docker_creds')
     }
